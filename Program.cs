@@ -1,13 +1,15 @@
 ﻿using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace HelloThere
 {
     public static class Base36
     {
         private const int Base36Length = 36;
-
         private static ReadOnlySpan<byte> Base36Char => new byte[Base36Length]
         {
             // abuse compiler optimization for static byte[] data
@@ -19,38 +21,79 @@ namespace HelloThere
             (byte)'U', (byte)'V', (byte)'W', (byte)'X', (byte)'Y', (byte)'Z'
         };
 
-        [MethodImpl(MethodImplOptions.AggressiveOptimization)] // C# does some stupid stuff with the stack otherwise
+        private static ReadOnlySpan<ulong> ReverseIterationLength => new ulong[13]
+        {
+            1UL,
+            36UL,
+            1296UL,
+            46656UL,
+            1679616UL,
+            60466176UL,
+            2176782336UL,
+            78364164096UL,
+            2821109907456UL,
+            101559956668416UL,
+            3656158440062976UL,
+            131621703842267136UL,
+            4738381338321616896UL
+        };
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static string Encode(ulong input)
         {
             var length = IterationLength(input);
             return string.Create(length, input, (stringSpan, inputValue) =>
             {
-                ref char last = ref Unsafe.Add(ref MemoryMarshal.GetReference(stringSpan), stringSpan.Length - 1);
+                ref char lastChar = ref LastCharInSpan(stringSpan);
                 while (inputValue != 0)
                 {
                     inputValue = DivRem(inputValue, out var index);
-                    last = (char)Base36Char[(int)index];
-                    last = ref Unsafe.Subtract(ref last, 1);
+                    lastChar = (char)Base36Char[(int)index];
+                    lastChar = ref Unsafe.Subtract(ref lastChar, 1);
                 }
             });
         }
 
         public static ulong Decode(ReadOnlySpan<char> base36Value)
         {
-            ref char last = ref Unsafe.Add(ref MemoryMarshal.GetReference(base36Value), base36Value.Length - 1);
+            ref char lastChar = ref LastCharInSpan(base36Value);
+            ref ulong pow = ref MemoryMarshal.GetReference(ReverseIterationLength);
+
             ulong sum = 0;
-            for (var multiplier = 0; multiplier < base36Value.Length; multiplier++)
+            for (var i = 0; i < base36Value.Length; i++)
             {
-                var index = (ulong)Base36Char.IndexOf((byte)last);
-                sum += FastPow(index, multiplier);
-                last = ref Unsafe.Subtract(ref last, 1);
+                var index = FastIndexOf((byte)lastChar);
+                sum += index * pow;
+                pow = ref Unsafe.Add(ref pow, 1);
+                lastChar = ref Unsafe.Subtract(ref lastChar, 1);
+            }
+            return sum;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        private static ulong FastIndexOf(byte value)
+        {
+            if (Avx2.IsSupported)
+            {
+                var base32CharValues = Unsafe.ReadUnaligned<Vector256<byte>>(ref MemoryMarshal.GetReference(Base36Char));
+                int matches = Avx2.MoveMask(Avx2.CompareEqual(Vector256.Create(value), base32CharValues));
+                if (matches != 0)
+                {
+                    return (ulong)BitOperations.TrailingZeroCount(matches);
+                }
+
+                if (value == Base36Char[32]) return 33;
+                if (value == Base36Char[33]) return 34;
+                if (value == Base36Char[34]) return 35;
+                return 36;
             }
 
-            return sum;
+            return (ulong)Base36Char.IndexOf(value);
         }
 
         private static int IterationLength(ulong value)
         {
+            // constants of ReverseIterationLength
             const ulong p01 = 36UL;
             const ulong p02 = 1296UL;
             const ulong p03 = 46656UL;
@@ -79,14 +122,7 @@ namespace HelloThere
             return 13;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong FastPow(ulong index, int multiplier)
-        {
-            const double log36 = 3.58351893845611; // Math.Log(36)
-            return index * (ulong)Math.Round(Math.Exp(multiplier * log36));
-        }
-
-        // Math.DivRem ulong doesnt exist in netcore31
+        // Math.DivRem ulong doesnt exist in netcore31?
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong DivRem(ulong a, out ulong result)
         {
@@ -94,5 +130,9 @@ namespace HelloThere
             result = a - (div * Base36Length);
             return div;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ref char LastCharInSpan(ReadOnlySpan<char> span)
+            => ref Unsafe.Add(ref MemoryMarshal.GetReference(span), span.Length - 1);
     }
 }
