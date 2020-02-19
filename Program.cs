@@ -69,11 +69,12 @@ namespace HelloThere
                     return ulong.MaxValue;
                 }
 
-                // assume ascii
+                const int lastDigit = '9' - '0';
                 var index = (byte)lastChar - '0';
-                if (index > 10)
+                if (index > lastDigit)
                 {
-                    index -= 7;
+                    const int spaceBetweenDigitsAndChars = 'A' - '9' - 1;
+                    index -= spaceBetweenDigitsAndChars;
                 }
 
                 sum += (ulong)index * pow;
