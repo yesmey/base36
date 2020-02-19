@@ -1,9 +1,6 @@
-﻿using System;
-using System.Numerics;
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace HelloThere
 {
@@ -21,7 +18,7 @@ namespace HelloThere
             (byte)'U', (byte)'V', (byte)'W', (byte)'X', (byte)'Y', (byte)'Z'
         };
 
-        private static ReadOnlySpan<ulong> ReverseIterationLength => new ulong[13]
+        private static ReadOnlySpan<ulong> Pow36 => new ulong[13]
         {
             1UL,
             36UL,
@@ -56,39 +53,35 @@ namespace HelloThere
 
         public static ulong Decode(ReadOnlySpan<char> base36Value)
         {
+            if (base36Value.IsEmpty)
+            {
+                return ulong.MaxValue;
+            }
+
             ref char lastChar = ref LastCharInSpan(base36Value);
-            ref ulong pow = ref MemoryMarshal.GetReference(ReverseIterationLength);
+            ref ulong pow = ref MemoryMarshal.GetReference(Pow36);
 
             ulong sum = 0;
             for (var i = 0; i < base36Value.Length; i++)
             {
-                var index = FastIndexOf((byte)lastChar);
-                sum += index * pow;
+                if (lastChar < '0' || lastChar > 'Z')
+                {
+                    return ulong.MaxValue;
+                }
+
+                // assume ascii
+                var index = (byte)lastChar - '0';
+                if (index > 10)
+                {
+                    index -= 7;
+                }
+
+                sum += (ulong)index * pow;
                 pow = ref Unsafe.Add(ref pow, 1);
                 lastChar = ref Unsafe.Subtract(ref lastChar, 1);
             }
+
             return sum;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
-        private static ulong FastIndexOf(byte value)
-        {
-            if (Avx2.IsSupported)
-            {
-                var base32CharValues = Unsafe.ReadUnaligned<Vector256<byte>>(ref MemoryMarshal.GetReference(Base36Char));
-                int matches = Avx2.MoveMask(Avx2.CompareEqual(Vector256.Create(value), base32CharValues));
-                if (matches != 0)
-                {
-                    return (ulong)BitOperations.TrailingZeroCount(matches);
-                }
-
-                if (value == Base36Char[32]) return 33;
-                if (value == Base36Char[33]) return 34;
-                if (value == Base36Char[34]) return 35;
-                return 36;
-            }
-
-            return (ulong)Base36Char.IndexOf(value);
         }
 
         private static int IterationLength(ulong value)
