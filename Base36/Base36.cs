@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Yesmey;
@@ -27,6 +28,8 @@ public static class Base36
         4738381338321616896UL
     };
 
+    private static readonly SearchValues<char> ValidCharacters = SearchValues.Create("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
     [SkipLocalsInit]
     public static string Encode(ulong input)
     {
@@ -49,20 +52,20 @@ public static class Base36
             return 0;
         }
 
+        if (base36Value.IndexOfAnyExcept(ValidCharacters) >= 0)
+        {
+            ThrowInvalidFormat();
+        }
+        
+        const int lastDigit = '9' - '0';
+        const int spaceBetweenDigitsAndChars = 'A' - '9' - 1;
+
         ulong sum = 0;
         for (var i = 1; i <= base36Value.Length; i++)
         {
-            char value = base36Value[^i];
-            if (!char.IsAsciiLetterOrDigit(value))
-            {
-                ThrowInvalidFormat();
-            }
-
-            const int lastDigit = '9' - '0';
-            int pow = value - '0';
+            int pow = base36Value[^i] - '0';
             if (pow > lastDigit)
             {
-                const int spaceBetweenDigitsAndChars = 'A' - '9' - 1;
                 pow -= spaceBetweenDigitsAndChars;
             }
 
