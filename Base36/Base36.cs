@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace HelloThere
+namespace Yesmey
 {
     public static class Base36
     {
@@ -55,7 +55,7 @@ namespace HelloThere
         {
             if (base36Value.IsEmpty)
             {
-                return ulong.MaxValue;
+                return 0;
             }
 
             ref char lastChar = ref LastCharInSpan(base36Value);
