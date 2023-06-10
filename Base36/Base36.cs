@@ -9,8 +9,9 @@ public static class Base36
 
     private static ReadOnlySpan<byte> Base36Char => "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"u8;
 
-    private static ReadOnlySpan<ulong> Pow36 => new ulong[13]
+    private static ReadOnlySpan<ulong> Pow36 => new ulong[14]
     {
+        0UL, // padding needed because decoding starts at 1
         1UL,
         36UL,
         1296UL,
@@ -49,24 +50,23 @@ public static class Base36
         }
 
         ulong sum = 0;
-        int powOffset = 0;
-        for (var i = base36Value.Length - 1; i >= 0; i--)
+        for (var i = 1; i <= base36Value.Length; i++)
         {
-            char value = base36Value[i];
+            char value = base36Value[^i];
             if (!char.IsAsciiLetterOrDigit(value))
             {
                 ThrowInvalidFormat();
             }
 
             const int lastDigit = '9' - '0';
-            var index = (byte)value - '0';
-            if (index > lastDigit)
+            int pow = value - '0';
+            if (pow > lastDigit)
             {
                 const int spaceBetweenDigitsAndChars = 'A' - '9' - 1;
-                index -= spaceBetweenDigitsAndChars;
+                pow -= spaceBetweenDigitsAndChars;
             }
 
-            sum += (ulong)index * Pow36[powOffset++];
+            sum += (ulong)pow * Pow36[i];
         }
 
         return sum;
