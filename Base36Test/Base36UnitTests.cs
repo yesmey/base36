@@ -13,7 +13,7 @@ public class Base36UnitTests
     [Fact]
     public void EncodeEmpty()
     {
-        //Assert.Equal(string.Empty, Base36.Encode(0));
+        Assert.Equal(string.Empty, Base36.Encode(0));
     }
 
     [Fact]
