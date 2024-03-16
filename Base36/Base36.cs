@@ -10,8 +10,8 @@ public static class Base36
 
     private static ReadOnlySpan<byte> Base36Char => "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"u8;
 
-    private static ReadOnlySpan<ulong> Pow36 => new ulong[14]
-    {
+    private static ReadOnlySpan<ulong> Pow36 =>
+    [
         0UL, // padding needed because decoding starts at 1
         1UL,
         36UL,
@@ -26,7 +26,7 @@ public static class Base36
         3656158440062976UL,
         131621703842267136UL,
         4738381338321616896UL
-    };
+    ];
 
     private static readonly SearchValues<char> ValidCharacters = SearchValues.Create("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
@@ -40,8 +40,10 @@ public static class Base36
         {
             ulong index;
             (input, index) = Math.DivRem(input, Base36Length);
-            buffer[offset--] = (char)Base36Char[(int)index];
+            buffer[offset] = (char)Base36Char[(int)index];
+            --offset;
         }
+
         return new string(buffer.Slice(offset + 1));
     }
 
@@ -52,7 +54,7 @@ public static class Base36
             return 0;
         }
 
-        if (base36Value.IndexOfAnyExcept(ValidCharacters) >= 0)
+        if (base36Value.ContainsAnyExcept(ValidCharacters))
         {
             ThrowInvalidFormat();
         }
